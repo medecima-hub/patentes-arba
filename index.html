@@ -609,7 +609,7 @@ function resultHTML(emp){
   h+='<button class="subtab" role="tab" aria-selected="'+(state.tab==='excl')+'" data-a="tab" data-v="excl">No se pagan ('+r.excl.length+')</button></div>';
   var tab=state.tab,rows=r[catKey(tab)],showStock=tab==='1'||tab==='alert',showPv=!showStock;
   var anyObs=rows.some(function(x){return obs(x);});
-  h+='<div class="tools"><h3>'+esc(catLabel(tab))+'</h3><span class="muted">'+rows.length+' dominios</span><span style="margin-left:auto"></span><button class="btn small" data-a="copy" data-k="doms"'+(rows.length?'':' disabled')+'>Copiar dominios</button><button class="btn small" data-a="copy" data-k="table"'+(rows.length?'':' disabled')+'>Copiar tabla</button>'+(cap.downloads?'<button class="btn small" data-a="xlsx">Descargar Excel</button>':'')+'</div>';
+  h+='<div class="tools"><h3>'+esc(catLabel(tab))+'</h3><span class="muted">'+rows.length+' dominios</span><span style="margin-left:auto"></span><button class="btn small" data-a="copy" data-k="doms"'+(rows.length?'':' disabled')+'>Copiar dominios</button><button class="btn small" data-a="copy" data-k="table"'+(rows.length?'':' disabled')+'>Copiar tabla</button>'+(canXlsx()?'<button class="btn small" data-a="xlsx">Descargar Excel</button>':'')+'</div>';
   if(!rows.length)h+='<div class="alert info">No hay dominios en esta categoría.</div>';
   else{
     h+='<div class="scroll listbox"><table><thead><tr><th>Dominio</th>'+(hasImp?'<th class="r">Importe</th>':'')+(showStock?'<th>Stock</th>':'')+(showPv?'<th>Preventa</th><th>Entrega</th><th class="r">Días</th>':'')+'<th>Descripción</th>'+(anyObs?'<th>Observación</th>':'')+'</tr></thead><tbody>';
@@ -633,7 +633,7 @@ function resumenHTML(){
     h+='<tr><td>'+esc(e.name)+(miss?' <span class="badge">Faltan '+miss+' archivos</span>':'')+'</td><td class="num">'+r.total+'</td><td class="num">'+r.c1.length+'</td><td class="num">'+r.c2.length+'</td><td class="num">'+r.c3.length+'</td><td class="num"><b>'+r.pagar+'</b></td><td class="num">'+r.rev.length+'</td><td class="num">'+((state.mode==='apr'?r.pend.length:r.alertas.length)?'<span class="flag">'+(state.mode==='apr'?r.pend.length:r.alertas.length)+'</span>':'0')+'</td><td><button class="btn small" data-a="go" data-id="'+e.id+'" data-i="'+RES+'">Ver detalle</button></td></tr>';
   });
   h+='<tr class="tot"><td>Total</td><td class="num">'+t.a+'</td><td class="num">'+t.c1+'</td><td class="num">'+t.c2+'</td><td class="num">'+t.c3+'</td><td class="num">'+t.p+'</td><td class="num">'+t.v+'</td><td class="num">'+t.al+'</td><td></td></tr></tbody></table></div>';
-  h+='<div class="tools"><button class="btn primary" data-a="copy" data-k="alldoms"'+(t.p?'':' disabled')+'>Copiar todos los dominios a pagar</button><button class="btn" data-a="copy" data-k="summary">Copiar resumen</button>'+(cap.downloads?'<button class="btn" data-a="xlsxall">Descargar Excel</button>':'')+'<span class="muted">Se pega directo en Excel, con una columna de empresa y categoría.</span></div></section>';
+  h+='<div class="tools"><button class="btn primary" data-a="copy" data-k="alldoms"'+(t.p?'':' disabled')+'>Copiar todos los dominios a pagar</button><button class="btn" data-a="copy" data-k="summary">Copiar resumen</button>'+(canXlsx()?'<button class="btn" data-a="xlsxall">Descargar Excel</button>':'')+'<span class="muted">Se pega directo en Excel, con una columna de empresa y categoría.</span></div></section>';
   return h;
 }
 function cierreBarHTML(emp,r){
@@ -800,11 +800,20 @@ async function delCierre(id){
   }catch(e){toast(dbMsg(e));}
   state.delConfirm='';render();
 }
+function canXlsx(){return !!cap.downloads||typeof XLSX!=='undefined';}
 function saveXlsx(wb,filename){
-  if(!cap.downloads||typeof XLSX==='undefined')return;
+  if(typeof XLSX==='undefined'){toast('No se pudo cargar la librería de Excel.');return;}
   try{
     var out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
-    cap.downloads.save({filename:filename,data:new Blob([out])}).then(function(){toast('Excel listo');},function(e){if(!e||e.code!=='declined')toast('No se pudo guardar el Excel.');});
+    var blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    if(cap.downloads){
+      cap.downloads.save({filename:filename,data:blob}).then(function(){toast('Excel listo');},function(e){if(!e||e.code!=='declined')toast('No se pudo guardar el Excel.');});
+      return;
+    }
+    var url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=filename;document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1000);
+    toast('Excel descargado');
   }catch(e){toast('No se pudo armar el Excel.');}
 }
 function safeSheet(n){return n.replace(/[\\\/\?\*\[\]:]/g,' ').slice(0,31);}
@@ -1026,7 +1035,7 @@ function resultAprHTML(emp){
   h+='<button class="subtab" role="tab" aria-selected="'+(state.tab==='excl')+'" data-a="tab" data-v="excl">No se pagan ('+r.excl.length+')</button></div>';
   var tab=state.tab;if(tab==='alert')tab='1';
   var rows=r[catKey(tab)],showStock=tab==='1'||tab==='pend',showPv=!showStock,anyObs=rows.some(function(x){return obs(x);});
-  h+='<div class="tools"><h3>'+esc(catLabel(tab))+'</h3><span class="muted">'+rows.length+' dominios</span><span style="margin-left:auto"></span><button class="btn small" data-a="copy" data-k="doms"'+(rows.length?'':' disabled')+'>Copiar dominios</button><button class="btn small" data-a="copy" data-k="table"'+(rows.length?'':' disabled')+'>Copiar tabla</button>'+(cap.downloads?'<button class="btn small" data-a="xlsx">Descargar Excel</button>':'')+'</div>';
+  h+='<div class="tools"><h3>'+esc(catLabel(tab))+'</h3><span class="muted">'+rows.length+' dominios</span><span style="margin-left:auto"></span><button class="btn small" data-a="copy" data-k="doms"'+(rows.length?'':' disabled')+'>Copiar dominios</button><button class="btn small" data-a="copy" data-k="table"'+(rows.length?'':' disabled')+'>Copiar tabla</button>'+(canXlsx()?'<button class="btn small" data-a="xlsx">Descargar Excel</button>':'')+'</div>';
   if(!rows.length)h+='<div class="alert info">No hay dominios en esta categoría.</div>';
   else{
     h+='<div class="scroll listbox"><table><thead><tr><th>Dominio</th>'+(showStock?'<th>Stock</th>':'')+(showPv?'<th>Preventa</th><th>Entrega</th><th class="r">Días</th>':'')+'<th>Descripción</th>'+(anyObs?'<th>Observación</th>':'')+'</tr></thead><tbody>';
