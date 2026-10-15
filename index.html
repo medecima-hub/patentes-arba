@@ -330,18 +330,22 @@ function makeFile(name,sheets,type,sample){
   setSheet(f,type);
   return f;
 }
+function bufToFile(buf,name,key){
+  var wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true}),sheets={};
+  wb.SheetNames.forEach(function(sn){
+    var aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:''});
+    if(aoa.length)sheets[sn]=aoa;
+  });
+  return makeFile(name,sheets,key,false);
+}
 function loadFileInto(emp,key,file){
   if(typeof XLSX==='undefined'){toast('No se pudo cargar el lector de planillas. Recargá la página.');return;}
   file.arrayBuffer().then(function(buf){
-    var wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true}),sheets={};
-    wb.SheetNames.forEach(function(sn){
-      var aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:''});
-      if(aoa.length)sheets[sn]=aoa;
-    });
-    var f=makeFile(file.name,sheets,key,false);
+    var f=bufToFile(buf,file.name,key);
     if(!f){toast('El archivo no tiene datos.');return;}
     state.data[emp].files[key]=f;
     render();
+    saveDraft(emp,key,f,buf,file.type);
     if(!f.parsed.map.size)toast('No se encontraron patentes válidas. Revisá la columna de dominio.');
   }).catch(function(){toast('No se pudo leer el archivo. Probá con .xlsx, .xls o .csv.');});
 }
@@ -545,7 +549,7 @@ function fileStepHTML(emp,i){
   return h;
 }
 function fileCardHTML(emp,key,f){
-  var h='<div class="filecard"><div class="filehead"><div><span class="fname">'+esc(f.name)+'</span> '+(f.sample?'<span class="badge">Ejemplo</span>':'')+'</div><button class="btn small" data-a="remove" data-key="'+key+'">Quitar archivo</button></div>';
+  var h='<div class="filecard"><div class="filehead"><div><span class="fname">'+esc(f.name)+'</span> '+(f.sample?'<span class="badge">Ejemplo</span>':'')+(f.nube?'<span class="badge">Guardado en la nube</span>':'')+'</div><button class="btn small" data-a="remove" data-key="'+key+'">Quitar archivo</button></div>';
   var hd=headers(f),sheetNames=Object.keys(f.sheets);
   h+='<div class="fields">';
   if(sheetNames.length>1){
@@ -686,7 +690,7 @@ function histHTML(){
     else{
       h+='<div class="scroll"><table><thead><tr><th>Período</th><th>Empresa</th><th>Tipo</th><th class="r">1</th><th class="r">2</th><th class="r">3</th><th class="r">A pagar</th><th class="r">Importe</th><th class="r">Exentos</th><th>Archivos</th><th></th></tr></thead><tbody>';
       rows.forEach(function(c){
-        var ar=c.archivos||{},links=FILE_KEYS.filter(function(k){return ar[k]&&ar[k].id;}).map(function(k){return '<a href="/_blob/'+esc(ar[k].id)+'" target="_blank" rel="noopener" title="'+esc(ar[k].name)+'">'+esc(k==='usados'?'Usados':k==='td'?'TD':k==='exen'?'Exen.':k==='pv'?'PV':'ARBA')+'</a>';}).join(' · ');
+        var ar=c.archivos||{},links=FILE_KEYS.filter(function(k){return ar[k]&&ar[k].id;}).map(function(k){return '<a href="'+esc(blobUrl(ar[k].id))+'" target="_blank" rel="noopener" title="'+esc(ar[k].name)+'">'+esc(k==='usados'?'Usados':k==='td'?'TD':k==='exen'?'Exen.':k==='pv'?'PV':'ARBA')+'</a>';}).join(' · ');
         var del=state.delConfirm===c._id?'<span class="muted">¿Eliminar?</span> <button class="btn small" data-a="delcyes" data-id="'+esc(c._id)+'">Sí</button> <button class="btn small" data-a="delcno">No</button>':'<button class="btn small" data-a="copyc" data-id="'+esc(c._id)+'">Copiar dominios</button> <button class="btn small" data-a="delc" data-id="'+esc(c._id)+'">Eliminar</button>';
         h+='<tr><td class="mono">'+esc(c.periodo)+'</td><td>'+esc(empName(c.empresa))+'</td><td>'+(c.tipo==='apr'?'APR':'ARBA')+'</td><td class="r num">'+(c.c1||[]).length+'</td><td class="r num">'+(c.c2||[]).length+'</td><td class="r num">'+(c.c3||[]).length+'</td><td class="r num"><b>'+(Number(c.pagar)||0)+'</b></td><td class="r num">'+(c.tipo==='apr'?'-':fmtMoney(c.pagarImp))+'</td><td class="r num">'+(Number(c.exentosN)||0)+'</td><td>'+(links||'<span class="muted">-</span>')+'</td><td>'+del+'</td></tr>';
       });
@@ -701,7 +705,7 @@ function manualHTML(){
 }
 function render(){
   var fx=document.activeElement&&document.activeElement.id;
-  document.getElementById('app').innerHTML=topHTML()+(state.emp==='resumen'?resumenHTML():wizardHTML())+calHTML()+(state.mode==='apr'?'':ahorroHTML())+histHTML()+manualHTML()+'<p class="foot">Los archivos se leen en tu navegador. Solo se guardan los datos y archivos de los meses que cerrás, dentro de este artefacto privado. Lo que cargues y no cierres hay que volver a cargarlo.</p>';
+  document.getElementById('app').innerHTML=topHTML()+(state.emp==='resumen'?resumenHTML():wizardHTML())+calHTML()+(state.mode==='apr'?'':ahorroHTML())+histHTML()+manualHTML()+(cap.cloud?'<p class="foot">Los archivos se leen en tu navegador y se guardan en tu base de Cloudflare: al recargar la página se recuperan solos. Para reemplazar uno, subí el nuevo o tocá “Quitar archivo”.</p>':'<p class="foot">Los archivos se leen en tu navegador. Solo se guardan los datos y archivos de los meses que cerrás, dentro de este artefacto privado. Lo que cargues y no cierres hay que volver a cargarlo.</p>');
   var ta=document.getElementById('manual-ta');if(ta){ta.focus();ta.select();}
   else if(fx){var el=document.getElementById(fx);if(el&&el.focus){try{el.focus();}catch(e){}}}
 }
@@ -715,6 +719,8 @@ function perDefault(){return state.per||String(state.opts.ref).slice(0,7);}
 function doms(a){return a.map(function(x){return x.dom;});}
 function dbMsg(e){
   var c=e&&e.code;
+  if(c==='unauthenticated')return 'Clave incorrecta para la base de Cloudflare. Recargá la página e ingresala de nuevo.';
+  if(c==='network')return 'No se pudo conectar con la base de Cloudflare. Revisá la conexión.';
   return c==='quota_exceeded'?'Se llenó el espacio de la base. Eliminá cierres viejos.':c==='invalid_argument'?'No tenés permiso para guardar en esta página.':c==='resource_exhausted'?'Demasiadas operaciones seguidas. Esperá un momento y reintentá.':'No se pudo guardar. Reintentá en unos segundos.';
 }
 function toCsv(aoa){
@@ -738,7 +744,123 @@ function subscribeDb(){
     softRender();
   },function(){softRender();});
 }
+/* ---------- base en Cloudflare (Worker + D1 + KV) ---------- */
+// Pegá acá la URL de tu Worker (sin barra al final). Si queda vacío, la página funciona como antes, sin guardar nada.
+var CF_API='https://patentes-arba.medecima.workers.dev';
+function cfClave(){
+  var k='';try{k=localStorage.getItem('patentes_clave')||'';}catch(_e){}
+  if(!k){k=(prompt('Clave de acceso a la base de Patentes ARBA:')||'').trim();if(k){try{localStorage.setItem('patentes_clave',k);}catch(_e){}}}
+  return k;
+}
+async function cfFetch(path,opt){
+  opt=opt||{};opt.headers=Object.assign({'X-Clave':cfClave()},opt.headers||{});
+  var r;
+  try{r=await fetch(CF_API.replace(/\/+$/,'')+path,opt);}
+  catch(e0){var en=new Error('network');en.code='network';throw en;}
+  if(r.status===401){try{localStorage.removeItem('patentes_clave');}catch(_e){}var ea=new Error('unauthenticated');ea.code='unauthenticated';throw ea;}
+  if(!r.ok){var j={};try{j=await r.json();}catch(_e){}var er=new Error(j.error||('HTTP '+r.status));er.code=j.error;throw er;}
+  return r;
+}
+function cfDb(){
+  var subs={};
+  function snap(list){return {docs:list.map(function(x){return {id:x.id,data:function(){return x.data;}};})};}
+  function refresh(c){
+    var s=subs[c];if(!s||!s.length)return Promise.resolve();
+    return cfFetch('/db/'+encodeURIComponent(c)).then(function(r){return r.json();})
+      .then(function(list){s.forEach(function(o){o.cb(snap(list));});})
+      .catch(function(e){s.forEach(function(o){if(o.err)o.err(e);});});
+  }
+  // Otros usuarios pueden cerrar meses: se refresca cada 30 s y al volver a la pestaña.
+  setInterval(function(){if(document.visibilityState==='visible')Object.keys(subs).forEach(refresh);},30000);
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')Object.keys(subs).forEach(refresh);});
+  function url(p){var i=p.indexOf('/');return '/db/'+encodeURIComponent(p.slice(0,i))+'/'+encodeURIComponent(p.slice(i+1));}
+  function send(p,method,data){
+    var o={method:method};
+    if(data!==undefined){o.headers={'Content-Type':'application/json'};o.body=JSON.stringify(data);}
+    return cfFetch(url(p),o).then(function(){refresh(p.split('/')[0]);});
+  }
+  return {
+    collection:function(c){return {
+      onSnapshot:function(cb,err){(subs[c]=subs[c]||[]).push({cb:cb,err:err});refresh(c);return function(){subs[c]=subs[c].filter(function(o){return o.cb!==cb;});};},
+      get:function(){return cfFetch('/db/'+encodeURIComponent(c)).then(function(r){return r.json();}).then(snap);}
+    };},
+    doc:function(p){return {
+      set:function(d){return send(p,'PUT',d);},
+      update:function(d){return send(p,'PATCH',d);},
+      delete:function(){return send(p,'DELETE');}
+    };}
+  };
+}
+function cfAssets(){return {
+  upload:function(blob,o){
+    return cfFetch('/assets',{method:'POST',headers:{'Content-Type':(o&&o.type)||blob.type||'application/octet-stream','X-Nombre':encodeURIComponent((o&&o.name)||'')},body:blob}).then(function(r){return r.json();});
+  },
+  delete:function(id){return cfFetch('/assets/'+encodeURIComponent(id),{method:'DELETE'});},
+  fetch:function(id){return cfFetch('/assets/'+encodeURIComponent(id)).then(function(r){return r.arrayBuffer();});},
+  url:function(id){return CF_API.replace(/\/+$/,'')+'/assets/'+encodeURIComponent(id)+'?k='+encodeURIComponent(cfClave());}
+};}
+function blobUrl(id){return cap.assets&&cap.assets.url?cap.assets.url(id):'/_blob/'+id;}
+
+/* Borradores: cada archivo que subís queda guardado (empresa + paso) hasta que lo quites o lo reemplaces. */
+var drafts={};
+function draftMeta(f){return {hoja:f.sheet,fila:f.headerRow,map:f.map};}
+async function saveDraft(emp,key,f,buf,type){
+  if(!cap.cloud||!f||f.sample)return;
+  var id=emp+'_'+key,old=drafts[id];
+  try{
+    var up=await cap.assets.upload(new Blob([buf],{type:type||'application/octet-stream'}),{type:type,name:f.name});
+    var meta=Object.assign({empresa:emp,clave:key,nombre:f.name,archivo:up.id,cargado:new Date().toISOString()},draftMeta(f));
+    await cap.db.doc('borradores/'+id).set(meta);
+    drafts[id]=meta;
+    if(old&&old.archivo&&old.archivo!==up.id){try{await cap.assets.delete(old.archivo);}catch(_e){}}
+    if(state.data[emp].files[key]===f){f.nube=true;softRender();}
+  }catch(e){toast('No se pudo guardar '+f.name+' en la nube. '+dbMsg(e));}
+}
+function saveDraftMeta(emp,key){
+  var id=emp+'_'+key,m=drafts[id],f=state.data[emp].files[key];
+  if(!cap.cloud||!m||!f||f.sample)return;
+  Object.assign(m,draftMeta(f));
+  cap.db.doc('borradores/'+id).update(draftMeta(f)).catch(function(){});
+}
+async function removeDraft(emp,key){
+  var id=emp+'_'+key,m=drafts[id];
+  if(!cap.cloud||!m)return;
+  delete drafts[id];
+  try{await cap.db.doc('borradores/'+id).delete();if(m.archivo)await cap.assets.delete(m.archivo);}catch(_e){}
+}
+async function restoreDrafts(){
+  var snapB;
+  try{snapB=await cap.db.collection('borradores').get();}catch(e){toast(dbMsg(e));return;}
+  var list=snapB.docs.map(function(d){return Object.assign({_id:d.id},d.data());});
+  if(!list.length)return;
+  var t0=Date.now();
+  while(typeof XLSX==='undefined'&&Date.now()-t0<20000)await new Promise(function(r){setTimeout(r,200);});
+  if(typeof XLSX==='undefined'){toast('No se pudo cargar el lector de planillas para recuperar los archivos guardados.');return;}
+  var n=0;
+  for(var i=0;i<list.length;i++){
+    var m=list[i];drafts[m._id]=m;
+    if(!state.data[m.empresa])continue;
+    var cur=state.data[m.empresa].files[m.clave];
+    if(cur&&!cur.sample)continue;
+    try{
+      var buf=await cap.assets.fetch(m.archivo);
+      var f=bufToFile(buf,m.nombre,m.clave);
+      if(!f)continue;
+      if(m.hoja&&f.sheets[m.hoja]&&m.hoja!==f.sheet){f.sheet=m.hoja;setSheet(f,m.clave);}
+      if(typeof m.fila==='number'&&m.fila!==f.headerRow){f.headerRow=m.fila;autoMap(f,m.clave);}
+      if(m.map){Object.keys(m.map).forEach(function(k){f.map[k]=m.map[k];});}
+      f.parsed=parseFile(f,m.clave);
+      f.nube=true;
+      state.data[m.empresa].files[m.clave]=f;n++;
+    }catch(_e){}
+  }
+  if(n){render();toast('Se recuperaron '+n+' archivo'+(n>1?'s':'')+' guardado'+(n>1?'s':'')+' en la nube.');}
+}
+
 function initCaps(){
+  if(CF_API&&!(window.claude&&typeof window.claude.use==='function')){
+    cap.db=cfDb();cap.assets=cfAssets();cap.cloud=true;subscribeDb();restoreDrafts();softRender();return;
+  }
   if(!window.claude||typeof window.claude.use!=='function')return;
   window.claude.use('db').then(function(db){if(db){cap.db=db;subscribeDb();softRender();}}).catch(function(){});
   window.claude.use('assets').then(function(a){if(a){cap.assets=a;softRender();}}).catch(function(){});
@@ -1139,7 +1261,7 @@ document.addEventListener('click',function(e){
   else if(a==='go'){if(!canEdit(t.dataset.id)){lockMsg();return;}state.emp=t.dataset.id;state.data[t.dataset.id].step=+t.dataset.i;}
   else if(a==='next'){d.step=Math.min(RES,d.step+1);}
   else if(a==='prev'){d.step=Math.max(0,d.step-1);}
-  else if(a==='remove'){delete d.files[t.dataset.key];}
+  else if(a==='remove'){delete d.files[t.dataset.key];removeDraft(state.emp,t.dataset.key);}
   else if(a==='example'){if(state.mode==='apr')loadExampleApr(state.emp);else loadExample(state.emp);return;}
   else if(a==='tab'){state.tab=t.dataset.v;}
   else if(a==='closeman'){state.manual='';}
@@ -1184,9 +1306,9 @@ document.addEventListener('change',function(e){
   var t=e.target,d=state.data[state.emp];
   if(t.dataset.mine){state.mine=t.value;try{if(t.value)localStorage.setItem('patentes_mine',t.value);else localStorage.removeItem('patentes_mine');}catch(_e){}if(t.value)state.emp=t.value;state.tab='1';state.manual='';render();return;}
   if(t.dataset.file){if(t.files&&t.files[0])loadFileInto(state.emp,t.dataset.file,t.files[0]);return;}
-  if(t.dataset.sheet){var f=d.files[t.dataset.sheet];f.sheet=t.value;setSheet(f,t.dataset.sheet);render();return;}
-  if(t.dataset.hdr){var g=d.files[t.dataset.hdr];g.headerRow=Math.max(-1,(parseInt(t.value,10)||0)-1);autoMap(g,t.dataset.hdr);g.parsed=parseFile(g,t.dataset.hdr);render();return;}
-  if(t.dataset.col){var h=d.files[t.dataset.col];h.map[t.dataset.field]=parseInt(t.value,10);h.parsed=parseFile(h,t.dataset.col);render();return;}
+  if(t.dataset.sheet){var f=d.files[t.dataset.sheet];f.sheet=t.value;setSheet(f,t.dataset.sheet);saveDraftMeta(state.emp,t.dataset.sheet);render();return;}
+  if(t.dataset.hdr){var g=d.files[t.dataset.hdr];g.headerRow=Math.max(-1,(parseInt(t.value,10)||0)-1);autoMap(g,t.dataset.hdr);g.parsed=parseFile(g,t.dataset.hdr);saveDraftMeta(state.emp,t.dataset.hdr);render();return;}
+  if(t.dataset.col){var h=d.files[t.dataset.col];h.map[t.dataset.field]=parseInt(t.value,10);h.parsed=parseFile(h,t.dataset.col);saveDraftMeta(state.emp,t.dataset.col);render();return;}
   if(t.dataset.venc!==undefined){var yv=state.vyear,lv=vencList(yv).slice();lv[+t.dataset.venc]=t.value;state.venc[vk(yv)]=lv;saveVenc(yv);render();return;}
   if(t.dataset.opt){
     var k=t.dataset.opt;
