@@ -748,9 +748,8 @@ function subscribeDb(){
 // Pegá acá la URL de tu Worker (sin barra al final). Si queda vacío, la página funciona como antes, sin guardar nada.
 var CF_API='https://patentes-arba.medecima.workers.dev';
 function cfClave(){
-  var k='';try{k=localStorage.getItem('patentes_clave')||'';}catch(_e){}
-  if(!k){k=(prompt('Clave de acceso a la base de Patentes ARBA:')||'').trim();if(k){try{localStorage.setItem('patentes_clave',k);}catch(_e){}}}
-  return k;
+  // Clave desactivada: acceso libre.
+  return '';
 }
 async function cfFetch(path,opt){
   opt=opt||{};opt.headers=Object.assign({'X-Clave':cfClave()},opt.headers||{});
