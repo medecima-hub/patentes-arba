@@ -386,6 +386,7 @@ function compute(emp){
   arba.forEach(function(a,dom){
     var inU=!!(usados&&usados.has(dom)),inT=!!(td&&td.has(dom));
     var row={dom:dom,imp:a.imp,pv:'',ent:null,dias:null,desc:'',motivo:'',nota:'',origen:inU&&inT?'Usados + TD':inU?'Usados':inT?'Test drive':'',alerta:false,exento:false,tit:null,hasta:null};
+    var pv0=pvs&&pvs.get(dom);if(pv0){row.pv=pv0.pv;row.ent=pv0.ent;} // la PV se informa siempre, aunque el dominio se descarte antes
     row.desc=(inU&&usados.get(dom).desc)||(inT&&td.get(dom).desc)||'';
     var ex=exen&&exen.get(dom),fuente='archivo';
     if(!ex&&reg.has(dom)){ex={tit:reg.get(dom).tit};fuente='historial';}
@@ -1198,6 +1199,7 @@ function computeApr(emp){
   var res={c1:[],c2:[],c3:[],rev:[],excl:[],alertas:[],pend:[],total:b.cands.size,stockOk:!!(f.usados&&f.td),exVenc:0,exHist:0};
   b.cands.forEach(function(c,dom){
     var row={dom:dom,imp:0,pv:'',ent:null,dias:null,desc:c.desc,motivo:'',nota:'',origen:c.inU&&c.inT?'Usados + TD':c.inU?'Usados':'Test drive',alerta:false,exento:false,tit:null,hasta:null};
+    var pv0=pvs&&pvs.get(dom);if(pv0){row.pv=pv0.pv;row.ent=pv0.ent;} // la PV se informa siempre, aunque el dominio se descarte antes
     var m=muniGet(dom);
     if(!m){row.motivo='Sin consulta de municipalización';res.pend.push(row);return;}
     if(!m.m){row.motivo='No municipalizado';res.excl.push(row);return;}
