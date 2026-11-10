@@ -1086,7 +1086,7 @@ function xlsxEmpresa(emp){
   var r=curCompute(emp);if(!r)return;
   var hasImp=state.mode!=='apr'&&state.data[emp].files.arba.map.imp>=0,wb=XLSX.utils.book_new();
   [['1','1. Autos propios + TD'],['2','2. A cuenta reventas'],['3','3. Bonificadas reventas'],['rev','A revisar'],['alert','Alertas'],['pend','Por consultar'],['excl','No se pagan']].forEach(function(sp){
-    var rows=r[catKey(sp[0])];
+    var rows=r[catKey(sp[0])]||[];
     if(!rows.length&&sp[0]!=='1'&&sp[0]!=='2'&&sp[0]!=='3')return;
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(tableAOA(sp[0],rows,hasImp)),safeSheet(sp[1]));
   });
