@@ -186,6 +186,8 @@ a.btn{text-decoration:none;display:inline-block;color:inherit}
 'use strict';
 
 var EMPRESAS=[{id:'kiara',name:'Kiara'},{id:'ciara',name:'Ciara'},{id:'peara',name:'Peara'},{id:'movilis',name:'Movilis'},{id:'inv',name:'INV Group'}];
+// Empresas que solo pagan los dominios que están en el stock que suben (usados/permuta + test drive/objetivo).
+var SOLO_STOCK={movilis:true};
 var STEPS_ARBA=[
   {key:'arba',title:'Cuenta corriente ARBA',help:'Deuda de patentes de los automotores de la empresa, tal como la baja de ARBA. Cada dominio puede tener varias cuotas; se suman por dominio.'},
   {key:'usados',title:'Stock de usados',help:'Unidades usadas que hoy figuran en el stock de la empresa. Junto con el stock de test drive, sirve para detectar dominios sin preventa que no están en ningún stock.'},
@@ -399,6 +401,10 @@ function compute(emp){
         res.excl.push(row);return;
       }
       if(fuente==='archivo'){row.nota='Exención vencida el '+fmtDate(hasta);res.exVenc++;}
+    }
+    if(SOLO_STOCK[emp]&&!inU&&!inT){
+      row.motivo=(usados||td)?'Fuera del stock de '+empName(emp):'Falta subir el stock de '+empName(emp);
+      res.excl.push(row);return;
     }
     var pv=pvs&&pvs.get(dom);
     if(!pv){
